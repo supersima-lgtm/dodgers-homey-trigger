@@ -24,7 +24,7 @@ jobs:
         run: |
           mkdir -p cache
 
-          TODAY=$(date -u +"%Y-%m-%d")
+          TODAY="2024-04-02"
           CACHE_FILE="cache/${TODAY}.sent"
 
           # If already sent today, exit quietly
