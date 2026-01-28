@@ -1,0 +1,26 @@
+name: Test Homey Webhook
+
+on:
+  workflow_dispatch:   # manual trigger only
+
+jobs:
+  test-webhook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send test webhook to Homey
+        env:
+          HOMEY_WEBHOOK_URL: ${{ secrets.HOMEY_WEBHOOK_URL }}
+        run: |
+          echo "Sending test webhook to Homey…"
+
+          curl -v -X POST "$HOMEY_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "team": "Dodgers",
+              "result": "win",
+              "test": true,
+              "message": "GitHub Actions webhook test"
+            }'
+
+          echo "Webhook request sent."
