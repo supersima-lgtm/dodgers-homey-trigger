@@ -1,0 +1,83 @@
+name: Dodgers Win → Homey
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes
+  workflow_dispatch:        # allows manual runs
+
+jobs:
+  check-dodgers:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Restore cache
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: dodgers-win-${{ github.run_id }}
+          restore-keys: |
+            dodgers-win-
+
+      - name: Check Dodgers result
+        env:
+          HOMEY_WEBHOOK_URL: ${{ secrets.HOMEY_WEBHOOK_URL }}
+        run: |
+          mkdir -p cache
+
+          TODAY=$(date -u +"%Y-%m-%d")
+          CACHE_FILE="cache/${TODAY}.sent"
+
+          # If already sent today, exit quietly
+          if [ -f "$CACHE_FILE" ]; then
+            echo "Already sent for today."
+            exit 0
+          fi
+
+          TEAM_ID=119
+          API_URL="https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${TEAM_ID}&date=${TODAY}"
+
+          DATA=$(curl -s "$API_URL")
+
+          GAMES=$(echo "$DATA" | jq '.dates | length')
+          if [ "$GAMES" -eq 0 ]; then
+            echo "No game today."
+            exit 0
+          fi
+
+          GAME=$(echo "$DATA" | jq '.dates[0].games[0]')
+
+          STATUS=$(echo "$GAME" | jq -r '.status.abstractGameState')
+          if [ "$STATUS" != "Final" ]; then
+            echo "Game not final."
+            exit 0
+          fi
+
+          HOME_ID=$(echo "$GAME" | jq '.teams.home.team.id')
+          HOME_SCORE=$(echo "$GAME" | jq '.teams.home.score')
+          AWAY_SCORE=$(echo "$GAME" | jq '.teams.away.score')
+
+          if [ "$HOME_ID" -eq "$TEAM_ID" ]; then
+            DODGERS_SCORE=$HOME_SCORE
+            OPP_SCORE=$AWAY_SCORE
+          else
+            DODGERS_SCORE=$AWAY_SCORE
+            OPP_SCORE=$HOME_SCORE
+          fi
+
+          if [ "$DODGERS_SCORE" -le "$OPP_SCORE" ]; then
+            echo "Dodgers did not win."
+            exit 0
+          fi
+
+          echo "Dodgers WIN — triggering Homey 🎉"
+
+          curl -X POST "$HOMEY_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"team\": \"Dodgers\",
+              \"result\": \"win\",
+              \"date\": \"${TODAY}\",
+              \"score\": \"${DODGERS_SCORE}-${OPP_SCORE}\"
+            }"
+
+          touch "$CACHE_FILE"
